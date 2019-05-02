@@ -76,7 +76,7 @@ class MidiInputReceiver implements Receiver
 	public AudioFormat format;
 	public long pause_point = 0;
 	// Midi Status values
-	/*
+	///*
 	private Integer note_off = new Integer(0x8);
 	private Integer note_on = new Integer(0x9);
 	private Integer poly_press = new Integer(0xA);
@@ -85,16 +85,17 @@ class MidiInputReceiver implements Receiver
 	private Integer channel_press = new Integer(0xD);
 	private Integer pitch_bend = new Integer(0xE);
 	private Integer sysex = new Integer(0xF);
-	*/	
-	private Integer note_off = new Integer(0xffffff80);
-	private Integer note_on = new Integer(0xffffff90);
-	private Integer poly_press = new Integer(0xffffffa0);
-	private Integer control_change = new Integer(0xffffffb0);
-	private Integer program_change = new Integer(0xffffffc0);
-	private Integer channel_press = new Integer(0xffffffd0);
-	private Integer pitch_bend = new Integer(0xffffffe0);
-	private Integer sysex = new Integer(0xfffffff0);
-	
+	//*/
+	/*
+	private Integer note_off = new Integer(0xFFFFFF80);
+	private Integer note_on = new Integer(0xFFFFFF90);
+	private Integer poly_press = new Integer(0xFFFFFFA0);
+	private Integer control_change = new Integer(0xFFFFFFB0);
+	private Integer program_change = new Integer(0xFFFFFFC0);
+	private Integer channel_press = new Integer(0xFFFFFFD0);
+	private Integer pitch_bend = new Integer(0xFFFFFFE0);
+	private Integer sysex = new Integer(0xFFFFFFF0);
+	*/
 	public MidiInputReceiver(String name)
 	{
 		this.name = name;
@@ -118,24 +119,20 @@ class MidiInputReceiver implements Receiver
 		// Print Status in binary
 		//System.out.println("Status: " + Integer.toBinaryString(msg.getMessage()[0]));
 		// Print Status in hex
-		System.out.println("Status: " + Integer.toHexString(msg.getMessage()[0]));
-		///*
+		//System.out.println("Status: " + Integer.toHexString(msg.getMessage()[0]));
+		/*
 		for (int i = 1; i < msg.getMessage().length; i++)
 		{
 			System.out.println("Data: " + Integer.toHexString(msg.getMessage()[i]));
 		}
-		//*/
-		Integer status = new Integer(msg.getMessage()[0]);
+		*/
+		// Status messages are 32 bits, we don't care about the 24 MSB or the 4 LSB, so we isolate the 4bits we care about
+		Integer status = new Integer(((msg.getMessage()[0] >> 4) & (0xf)));
+		System.out.println("Status: " + Integer.toHexString(status));
 		
 		if (status.equals(note_on))
 		{
 			System.out.println("Note on");
-			/*try
-			{
-				clip.open(stream);
-				clip.start();
-			}
-			catch (Exception e) { System.out.println(e.toString()); }*/
 			// Necessary to resume clip from same point
 			//clip.setMicrosecondPosition(pause_point);
 			clip.setMicrosecondPosition(0);
@@ -147,13 +144,44 @@ class MidiInputReceiver implements Receiver
 			// Necessary to resume clip from same point
 			//pause_point = clip.getMicrosecondPosition();
 			clip.stop();
-			//clip.close();
-			//clip.stop();
+		}
+		else if (status.equals(poly_press))
+		{
+			// TODO: Add Aftertouch (changing sound by pressing harder on the key while it is already pressed)
+			// Akai MPK Mini does not support aftertouch
+			System.out.println("Polyphonic Pressure");
+		}
+		else if (status.equals(control_change))
+		{
+			// TODO: Add Control Change (see https://www.midi.org/specifications-old/item/table-3-control-change-messages-data-bytes-2 for info)
+			System.out.println("Control Change");
+		}
+		else if (status.equals(program_change))
+		{
+			// TODO: Add Program Change (patch change - allow user to change samples)
+			System.out.println("Program Change");
+		}
+		else if (status.equals(channel_press))
+		{
+			// TODO: Add Channel Pressure (Like aftertouch, but averaged across all of the keys of the controller)
+			// Akai MPK Mini does not support channel pressure
+			System.out.println("Channel Pressure");
+		}
+		else if (status.equals(pitch_bend))
+		{
+			// TODO: Add Pitch Bend (push the pitch higher or lower)
+			System.out.println("Pitch Bend");
+		}
+		else if (status.equals(sysex))
+		{
+			// Will not be interpreted by this program, all necessary features from Sysex messages are implemented elsewhere
+			System.out.println("System Exclusive Message");
 		}
 	}
 	
 	public void close()
 	{
+		clip.close();
 		return;
 	}
 }
