@@ -5,4 +5,7 @@ clean:
 	rm *.class
 
 run: FORCE
-	java SampleTest
+	java Rompler
+
+FORCE:
+
