@@ -1,5 +1,5 @@
 # Sampler
-Java Rompler
+Currently this is a Java Rompler (ROM-Sampler) that performs pitch shifting.  On-the-fly sampling, the ability to save and load samples during execution, and a GUI will be added in the future.
 
 Pitches range from 0.5x to 2.0x the frequency of the original sample.
 
