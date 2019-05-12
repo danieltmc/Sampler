@@ -20,6 +20,9 @@ public class MidiInputReceiver implements Receiver
 	public FloatControl fca;
 	public FloatControl fcb;
 	
+	public int num_playing = 0;
+	public int[] playing_indexes = {0, 0};
+	
 	// Midi Status values
 	private Integer note_off = new Integer(0x8);
 	private Integer note_on = new Integer(0x9);
@@ -53,7 +56,7 @@ public class MidiInputReceiver implements Receiver
 		Integer status = new Integer(((msg.getMessage()[0] >> 4) & (0xf)));
 		Integer input_channel = new Integer(msg.getMessage()[1]);
 		Integer input_val = new Integer(msg.getMessage()[2]);
-		System.out.println("Status: " + Integer.toHexString(status));
+		System.out.println("\nStatus: " + Integer.toHexString(status));
 		for (int i = 1; i < msg.getMessage().length; i++)
 		{
 			//System.out.println("Data #" + i + ": " + Integer.toBinaryString(msg.getMessage()[i]));
@@ -70,25 +73,15 @@ public class MidiInputReceiver implements Receiver
 			// Ensure that users can't cause NullPointerExceptions by going outside of the pre-defined range
 			if (input_channel < 48) { input_channel = 48; }
 			else if (input_channel > 72) { input_channel = 72; }
-			
 			// Necessary to resume clip from its previous stopping point - we don't want this, but it's interesting
 			//clip.setMicrosecondPosition(pause_point);
 			//clip.setMicrosecondPosition(0);
 			//clip.start();
-			
 			this.clips[input_channel - 48].setMicrosecondPosition(0);
 			//this.clips[input_channel - 48].start();
 			this.clips[input_channel - 48].loop(100);
-			/*
-			if (input_channel % 2 == 0)
-			{
-				clip.loop(10);
-			}
-			else
-			{
-				a.loop(10);
-			}
-			*/
+			if (this.num_playing == 1) { }
+			this.num_playing++;
 		}
 		else if (status.equals(note_off))
 		{
@@ -97,6 +90,7 @@ public class MidiInputReceiver implements Receiver
 			//pause_point = clip.getMicrosecondPosition();
 			//clip.stop();
 			this.clips[input_channel - 48].stop();
+			this.num_playing--;
 		}
 		else if (status.equals(poly_press))
 		{
