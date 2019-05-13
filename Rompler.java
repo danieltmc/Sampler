@@ -18,8 +18,11 @@ public class Rompler
 	private MidiInputReceiver temp;
 	// C3 = 1:2, Db3 = 8:15, D3 = 5:9, Eb3 = 3:5, E3 = 5:8, F3 = 2:3, Gb3 = 32:45, G3 = 3:4, Ab3 = 4:5, A3 = 5:6, Bb3 = 8:9, B3 = 15:16
 	// C4 = 1:1, Db4 = 16:15, D4 = 9:8, Eb4 = 6:5, E4 = 5:4, F4 = 4:3, Gb4 = 45:32, G4 = 3:2, Ab4 = 8:5, A4 = 5:3, Bb4 = 9:5, B4 = 15:8, C5 = 2:1
-	int[] upsamples = {1, 8, 5, 3, 5, 2, 32, 3, 4, 5, 8, 15, 1, 16, 9, 6, 5, 4, 45, 3, 8, 5, 9, 15, 2};
-	int[] downsamples = {2, 15, 9, 5, 8, 3, 45, 4, 5, 6, 9, 16, 1, 15, 8, 5, 4, 3, 32, 2, 5, 3, 5, 8, 1};
+	// Using alternate ratios because some of the larger pairs (like Gb) don't sound good unless they're rounded a little bit
+	//int[] upsamples = {1, 8, 5, 3, 5, 2, 32, 3, 4, 5, 8, 15, 1, 16, 9, 6, 5, 4, 45, 3, 8, 5, 9, 15, 2};
+	int[] upsamples = {1, 8, 5, 3, 5, 2, 7, 3, 4, 5, 8, 15, 1, 16, 9, 6, 5, 4, 10, 3, 8, 5, 9, 15, 2};
+	//int[] downsamples = {2, 15, 9, 5, 8, 3, 45, 4, 5, 6, 9, 16, 1, 15, 8, 5, 4, 3, 32, 2, 5, 3, 5, 8, 1};
+	int[] downsamples = {2, 15, 9, 5, 8, 3, 10, 4, 5, 6, 9, 16, 1, 15, 8, 5, 4, 3, 7, 2, 5, 3, 5, 8, 1};
 	
 	SourceDataLine new_line;
 	public Rompler(String samplename)
@@ -45,8 +48,6 @@ public class Rompler
 				streams[i] = new AudioInputStream(new ByteArrayInputStream(bytearray), orig_format, (long) bytearray.length);
 				clips[i] = (Clip) AudioSystem.getLine(new DataLine.Info(Clip.class, orig_format));
 				clips[i].open(streams[i]);
-				System.gc(); // Remove?
-				System.out.println(i+1);
 			}
 			System.out.println("All shifts completed");
 		}
@@ -78,16 +79,19 @@ public class Rompler
 	
 	public byte[] shift_by_interval(int interval_index, byte[] input)
 	{
-		byte[] output = shift_up_by_x(this.upsamples[interval_index], input);
-		output = shift_down_by_x(this.downsamples[interval_index], output);
+		byte[] output = shift_up_by_x(interval_index, input);
+		output = shift_down_by_x(interval_index, output);
 		return output;
 	}
 	
-	public byte[] shift_up_by_x(int degree, byte[] input)
+	public byte[] shift_up_by_x(int interval_index, byte[] input)
 	{
+		//System.out.println("Up");
+		int degree = this.upsamples[interval_index];
 		int new_length = degree * input.length;
 		byte[] output = new byte[new_length];
-		Arrays.fill(output, (byte) 0);
+		// 128 is outside of the range, so these are effectively tagged to be replaced
+		Arrays.fill(output, (byte) 128);
 		for (int i = 0; i < input.length; i++)
 		{
 			if ((i / degree) < output.length)
@@ -96,19 +100,27 @@ public class Rompler
 			}
 			else { break; }
 		}
-		// Linear interpolation of values
-		/*for (int i = 0; i < output.length; i++)
+		// Interpolation of stuffed values
+		for (int i = 0; i < output.length; i++)
 		{
-			if ((output[i] == 0) && (i < output.length - 1))
+			// Replace the stuffed values with the average of the point before and after
+			if ((output[i] == (byte) 128) && (i < output.length - 1) && (i > 0))
 			{
 				output[i] = (byte) (((int) output[i-1] + (int) output[i+1]) / 2);
 			}
-		}*/
+			// Sinc interpolation - it works, but it is significantly slower to process
+			/*if (output[i] == (byte) 128)
+			{
+				output[i] = (byte) ((double) 127 * (Math.sin(Math.PI * (double) i) / (Math.PI * (double) i)));
+			}*/
+		}
 		return output;
 	}
 	
-	public byte[] shift_down_by_x(int degree, byte[] input)
+	public byte[] shift_down_by_x(int interval_index, byte[] input)
 	{
+		//System.out.println("Down");
+		int degree = this.downsamples[interval_index];
 		int new_length = input.length / degree;
 		byte[] output = new byte[new_length];
 		Arrays.fill(output, (byte) 0);
@@ -120,7 +132,40 @@ public class Rompler
 			}
 			else { break; }
 		}
+		//return LPF(interval_index, output); // Kills the sound
 		return output;
+	}
+	
+	public byte[] LPF(int interval_index, byte[] input)
+	{
+		float normalized;
+		float temp;
+		byte val;
+		float q = (float) Math.sqrt(0.5);
+		float new_freq = (float) 1.0 / (float) this.downsamples[interval_index];
+		for (int i = 0; i < input.length; i++)
+		{
+			normalized = ((float) (input[i] + 128)) / ((float) (127 + 128));
+			temp = (float) 1 / ((((float) i * (float) i)/(new_freq * new_freq)) + ((float) i / (new_freq * q)) + (float) 1);
+			if (temp > (float) 0.5) { input[i] = (byte) (temp * (float) 127 * (float) 2); }
+			else if (temp < (float) 0.5) { input[i] = (byte) (temp * (float) -128 * (float) 2); }
+			else { input[i] = (byte) 0; }
+		}
+		return input;
+	}
+	
+	// Creates too much static to be useful
+	public byte[] gain(byte[] input)
+	{
+		float normalized;
+		for (int i = 0; i < input.length; i++)
+		{
+			normalized = ((float) (input[i] + 128)) / ((float) (127 + 128));
+			if (normalized > (float) 0.5) { input[i] = (byte) (normalized * (float) 127); }
+			else if (normalized < (float) 0.5) { input[i] = (byte) (normalized * (float) -128);	}
+			else { input[i] = (byte) 0; }
+		}
+		return input;
 	}
 	
 	public static void main(String[] args)

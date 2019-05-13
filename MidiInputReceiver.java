@@ -9,19 +9,8 @@ public class MidiInputReceiver implements Receiver
 	// Name of MIDI device
 	public String name;
 	public Clip clip;
-	public long pause_point = 0;
-	
-	public Clip a;
-	public Clip b;
-	public Clip c;
-	public Clip d;
 	public Clip[] clips;
-	
-	public FloatControl fca;
-	public FloatControl fcb;
-	
-	public int num_playing = 0;
-	public int[] playing_indexes = {0, 0};
+	public FloatControl[] fcs;
 	
 	// Midi Status values
 	private Integer note_off = new Integer(0x8);
@@ -37,17 +26,14 @@ public class MidiInputReceiver implements Receiver
 	{
 		this.name = name;
 	}
-	
-	public void setClip(Clip clip, Clip clipb)
-	{
-		this.clip = clip;
-		this.a = clipb;
-		//this.fca = (FloatControl) this.clip.getControl(FloatControl.Type.MASTER_GAIN);
-		//this.fcb = (FloatControl) this.a.getControl(FloatControl.Type.MASTER_GAIN);
-	}
 	public void setClipArray(Clip[] clips)
 	{
 		this.clips = clips;
+		this.fcs = new FloatControl[clips.length];
+		for (int i = 0; i < clips.length; i++)
+		{
+			this.fcs[i] = (FloatControl) clips[i].getControl(FloatControl.Type.MASTER_GAIN);
+		}
 	}
 	
 	public void send(MidiMessage msg, long timestamp)
@@ -73,24 +59,15 @@ public class MidiInputReceiver implements Receiver
 			// Ensure that users can't cause NullPointerExceptions by going outside of the pre-defined range
 			if (input_channel < 48) { input_channel = 48; }
 			else if (input_channel > 72) { input_channel = 72; }
-			// Necessary to resume clip from its previous stopping point - we don't want this, but it's interesting
-			//clip.setMicrosecondPosition(pause_point);
-			//clip.setMicrosecondPosition(0);
-			//clip.start();
 			this.clips[input_channel - 48].setMicrosecondPosition(0);
 			//this.clips[input_channel - 48].start();
 			this.clips[input_channel - 48].loop(100);
-			if (this.num_playing == 1) { }
-			this.num_playing++;
 		}
 		else if (status.equals(note_off))
 		{
 			System.out.println("Note off");
 			// Necessary to resume clip from same point
-			//pause_point = clip.getMicrosecondPosition();
-			//clip.stop();
 			this.clips[input_channel - 48].stop();
-			this.num_playing--;
 		}
 		else if (status.equals(poly_press))
 		{
@@ -102,13 +79,54 @@ public class MidiInputReceiver implements Receiver
 		{
 			// TODO: Add Control Change (see https://www.midi.org/specifications-old/item/table-3-control-change-messages-data-bytes-2 for info)
 			System.out.println("Control Change");
-			//fca.setValue(1.0f / ((float) input_val + 1));
+			System.out.println(this.fcs[13].getValue());
+			float a_val = (float) input_val / (float) 127;
+			float b_val = (float) input_val / (float) 127;
+			a_val = a_val * (float) 86;
+			a_val = a_val - (float) 80;
+			b_val = b_val * (float) 86;
+			b_val = (float) 86 - b_val;
+			
+			if (input_channel == 1)
+			{
+				this.fcs[12].setValue(a_val);
+				this.fcs[24].setValue(b_val);
+			}
+			else if (input_channel == 2)
+			{
+				this.fcs[2].setValue(a_val);
+				this.fcs[14].setValue(b_val);
+			}
+			else if (input_channel == 3)
+			{
+				this.fcs[4].setValue(a_val);
+				this.fcs[16].setValue(b_val);
+			}
+			else if (input_channel == 4)
+			{
+				this.fcs[5].setValue(a_val);
+				this.fcs[17].setValue(b_val);
+			}
+			else if (input_channel == 5)
+			{
+				this.fcs[7].setValue(a_val);
+				this.fcs[19].setValue(b_val);
+			}
+			else if (input_channel == 6)
+			{
+				this.fcs[9].setValue(a_val);
+				this.fcs[21].setValue(b_val);
+			}
+			else if (input_channel == 7)
+			{
+				this.fcs[11].setValue(a_val);
+				this.fcs[23].setValue(b_val);
+			}
 		}
 		else if (status.equals(program_change))
 		{
 			// TODO: Add Program Change (patch change - allow user to change samples)
 			System.out.println("Program Change");
-			//fcb.setValue(1.0f / ((float) input_val + 1));
 		}
 		else if (status.equals(channel_press))
 		{
